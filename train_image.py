@@ -3,7 +3,7 @@ from tensorflow.keras import layers
 from tensorflow.keras.models import Sequential
 
 import tensorflow_datasets as tfds
-from data_load_split import download_data, load_dataset_from_directory, preprocess_data, data_augmentation
+from data import download_data, data_augmentation
 
 
 class TrainImageModel:
@@ -23,32 +23,45 @@ class TrainImageModel:
         :param split: Percentage of samples for validation, if training is True (default: 20)
         :param test_samples: Number of samples to test the model (default: 100)
         :param size: Size to resize the images (default: (256,256))
-        :param batch_size: Size of the batches o data (default: 32)
+        :param batch_size: Size of the batches of data (default: 32)
         :param shuffle: Whether to shuffle the data (default: True)
         :param data_url: URL to the zip or tar file to download the data.
         :param data_dir: Path to the directory containing the data.
             This main directory should have subdirectories with the names of the classes.
         :param data_tf: Name of the TensorFlow dataset, check list at tfds.list_builders().
         """
+        # Reproducibility
+        seed = 123
+
         # Download data from url
         if data_url:
             data_dir = download_data(data_url, cache_dir='./')
-
 
         # Load data from directory
         size = (size, size)
         if data_dir:
             if training:
-                train_ds = load_dataset_from_directory(data_dir, split, size, batch_size, shuffle, subset='training')
-                val_ds = load_dataset_from_directory(data_dir, split, size, batch_size, shuffle, subset='validation')
-            else:
-                test_ds = load_dataset_from_directory(data_dir, split, size, batch_size, shuffle, subset='validation')
+                train_ds = tf.keras.preprocessing.image_dataset_from_directory(
+                    data_dir, validation_split=split, subset='training', seed=seed,
+                    image_size=size, batch_size=batch_size, shuffle=shuffle
+                )
+                val_ds = tf.keras.preprocessing.image_dataset_from_directory(
+                    data_dir, validation_split=split, subset='validation', seed=seed,
+                    image_size=size, batch_size=batch_size, shuffle=shuffle
+                )
 
+            else:
+                # if test_samples: split = test_samples / total_samples
+                test_ds = tf.keras.preprocessing.image_dataset_from_directory(
+                    data_dir, validation_split=split, subset='validation', seed=seed,
+                    image_size=size, batch_size=batch_size, shuffle=shuffle
+                )
 
         # Load tensorflow dataset
         if data_tf:
             split = "train[:" + str(test_samples) + "]"
             test_ds = tfds.load(data_tf, split=split, as_supervised=True, shuffle_files=shuffle)
+            test_ds = test_ds.map(lambda x, y: (tf.image.resize(x, size), y))
 
 
         print('\nImages and labels shapes:')
@@ -60,10 +73,12 @@ class TrainImageModel:
 
         # Preprocess data
         if training:
-            train_ds = preprocess_data(train_ds)
-            val_ds = preprocess_data(val_ds)
+            AUTOTUNE = tf.data.experimental.AUTOTUNE
+            train_ds = train_ds.cache().shuffle(1000).prefetch(buffer_size=AUTOTUNE)
+            val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
             processed_data = train_ds, val_ds
         else:
+            # processed_data = input_data.cache().batch(batch_size).prefetch(buffer_size=10)
             processed_data = preprocess_data(test_ds)
 
 
@@ -75,14 +90,14 @@ class TrainImageModel:
                     optimizer='adam', loss=None, metrics='accuracy', epochs=15):
         """Create, compile and fit the model.
 
-        :param processed_data:
+        :param processed_data: Tuple train_dataset, validation_dataset
         :param size:
-        :param channels:
-        :param num_classes:
-        :param optimizer:
-        :param loss:
-        :param metrics:
-        :param epochs:
+        :param channels: Integer, number of channels.
+        :param num_classes: Integer, number of classes.
+        :param optimizer: String, name of optimizer. See tf.keras.optimizers (default: 'adam')
+        :param loss: String, name of objective function. See tf.keras.losses
+        :param metrics: String, name of the metric to be evaluated by the model (default: 'accuracy')
+        :param epochs: Integer, number of epochs to train the model.
         """
 
         self.model = Sequential([
@@ -117,6 +132,6 @@ class TrainImageModel:
     def save_model(self, model_name):
         """Save the model.
 
-        :param model_name: Name of the model, the path to the saved model will be './saved_model/model_name'.
+        :param model_name: String, name of the model. The path to the saved model will be './saved_model/model_name'.
         """
         self.model.save('./saved_model/' + model_name)
