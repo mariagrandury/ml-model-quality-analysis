@@ -1,8 +1,9 @@
-import os
-import numpy as np
+import pathlib
 import tensorflow as tf
 import tensorflow_datasets as tfds
-from keras.preprocessing import image
+
+from data import download_data
+
 
 class ModelImage:
 
@@ -10,48 +11,77 @@ class ModelImage:
         self.type = 'image'
         self.task = None
         self.model = None
+        self.input_shape = None
+        self.num_classes = None
         self.data = None
 
 
-    def load_model(self, model_path='./saved_model/image-binary-classification-imagenet-acc979'):
+    def load_model(self, model_path):
         """Load a pretrained model.
 
-        :param model_path: Path to model file.
+        :param model_path: Str, path to saved model folder.
         """
         self.model = tf.keras.models.load_model(model_path)
+        self.input_shape = self.model.get_layer(self.model.layers[0].name).input.shape
+        self.num_classes = self.model.get_layer(self.model.layers[-1].name).output.shape[1]
+        print('Model loaded! Input shape:', self.input_shape, ', number of classes:', self.num_classes)
 
 
-    def load_data(self, samples=100, size=(150,150), data_path=None, data_url=None, data_tf='cats_vs_dogs'):
+    def load_data(self, split=0.1, test_samples=100,
+                  batch_size=32, shuffle=True,
+                  data_url=None, data_dir=None, data_tf=None):
         """Load and preprocess data.
 
-        :param samples: Number of samples to test the model (default: 100)
-        :param size: Size of the resized images (default: (150,150))
-        :param data_path: Path to the directory containing the data (e.g. './data/predict/')
-        :param data_url: URL to download the data (e.g. 'https:// example.zip')
-        :param data_tf: Name of the TensorFlow dataset (default: 'cats_vs_dogs')
+        :param split: Float, percentage of samples for testing (default: 0.1)
+        :param test_samples: Int, number of samples to test the model (default: 100)
+        :param batch_size: Int, size of the batches of data (default: 32)
+        :param shuffle: Bool, whether to shuffle the data (default: True)
+        :param data_url: Str, url to the zip or tar file to download the data.
+        :param data_dir: Str, path to the directory containing the data.
+            This main directory should have subdirectories with the names of the classes.
+        :param data_tf: Str, name of the TensorFlow dataset. See tfds.list_builders().
         """
-        if data_path:
-            for file in os.listdir(data_path):
-                path = data_path + file
-                img = image.load_img(path, target_size=size)
-                x = image.img_to_array(img)
-                x = np.expand_dims(x, axis=0)
-                processed_data = np.vstack([x])
+        seed = 123 # for reproducibility
+        AUTOTUNE = tf.data.experimental.AUTOTUNE # for better performance
+        size = (self.input_shape[1], self.input_shape[2]) # size to resize images
 
+
+        # Download data from url
+        if data_url:
+            data_dir = download_data(data_url, cache_dir='./')
+            print('Data downloaded!')
+
+
+        # Load data from directory
+        if data_dir:
+            data_dir = pathlib.Path(data_dir)
+            total = len(list(data_dir.glob('*/*.jpg')))
+            if test_samples: split = test_samples / total
+
+            test_ds = tf.keras.preprocessing.image_dataset_from_directory(
+                data_dir, validation_split=split, subset='validation', seed=seed,
+                image_size=size, batch_size=batch_size, shuffle=shuffle
+            )
+            data = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
+
+
+        # Load tensorflow dataset
         if data_tf:
-            split = "train[:100]"
-            test_ds = tfds.load(data_tf, split=split, as_supervised=True, shuffle_files=True)
-            input_data = test_ds.map(lambda x, y: (tf.image.resize(x, size), y))
-            processed_data = input_data.cache().batch(32).prefetch(buffer_size=10)
+            split = "train[:" + str(test_samples) + "]"
+            test_ds = tfds.load(data_tf, split=split, as_supervised=True, shuffle_files=shuffle)
+            test_ds = test_ds.map(lambda x, y: (tf.image.resize(x, size), y))
+            data = test_ds.cache().batch(batch_size).prefetch(buffer_size=AUTOTUNE)
 
-        self.data = processed_data
+
+        self.data = data
+        print('Data loaded! ', data)
 
 
     def predict(self):
         """Generate the model predictions for the given data.
 
-        :returns: prediction: Prediction of the model. Numpy array of shape (1,).
-        :returns: labels: Labels to check if the predictions are correct.
+        :returns: predictions: Predictions of the model. Numpy array of shape (1,).
+        :returns: labels: Labels to perform functionality analysis.
         """
         predictions= []
         labels = []
@@ -60,12 +90,17 @@ class ModelImage:
             labels.append(label)
 
         y_pred = []
-        for batch in predictions:
-            for prediction in batch:
-                if prediction < 0.5:
-                    y_pred.append(0)
-                else:
-                    y_pred.append(1)
+        if self.num_classes > 2:
+            for batch in predictions:
+                for prediction in batch:
+                    y_pred.append(tf.argmax(prediction).numpy())
+        else:
+            for batch in predictions:
+                for prediction in batch:
+                    if prediction < 0.5:
+                        y_pred.append(0)
+                    else:
+                        y_pred.append(1)
 
         y_true = []
         for batch in labels:
