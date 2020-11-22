@@ -7,6 +7,9 @@ Confusion, Reliability, Fairness, Generalization"""
 import seaborn as sns
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import sklearn
+from sklearn.metrics import confusion_matrix, classification_report, mean_absolute_error, mean_squared_error, r2_score
+
 
 class FunctionalityAnalysis:
 
@@ -16,65 +19,57 @@ class FunctionalityAnalysis:
         self.task = task
 
 
-    # Classification Problems
-
     def plot_confusion_matrix(self, p=0.5):
-        cm = tf.math.confusion_matrix(self.y_true, self.y_pred)
+        """Plot confusion matrix."""
+        cm = confusion_matrix(self.y_true, self.y_pred)
         plt.figure(figsize=(5, 5))
         sns.heatmap(cm, annot=True, fmt="d")
         plt.title('Confusion matrix @{:.2f}'.format(p))
-        plt.ylabel('Actual label')
+        plt.ylabel('Expected label')
+        plt.xlabel('Predicted label')
+        plt.show()
+
+
+    def plot_roc(self, **kwargs):
+        """Plot Receiver Operating Characteristic (ROC) curve."""
+        fp, tp, _ = sklearn.metrics.roc_curve(self.y_true, self.y_pred)
+        plt.figure(figsize=(5, 5))
+        plt.plot(100 * fp, 100 * tp,linewidth=2, **kwargs)
+        plt.xlabel('False positives [%]')
+        plt.ylabel('True positives [%]')
+        plt.xlim([-0.5, 20])
+        plt.ylim([80, 100.5])
+        plt.grid(True)
+        ax = plt.gca()
+        ax.set_aspect('equal')
+        plt.show()
+
+
+    def regression_report(self):
+        """Calculate the main regression metrics."""
+        mae = mean_absolute_error(self.y_true, self.y_pred)
+        mse = mean_squared_error(self.y_true, self.y_pred)
+        r2 = r2_score(self.y_true, self.y_pred)
+        print('mean absolute error             ', mae)
+        print('mean squared error              ', mse)
+        print('coefficient of determination    ', r2)
+
+
+    def plot_scatter(self):
+        """Plot scatter plot of expected vs predicted labels."""
+        plt.figure(figsize = (5, 5))
+        plt.scatter(self.y_true, self.y_pred)
+        plt.ylabel('Expected label')
         plt.xlabel('Predicted label')
 
-    def calculate_accuracy(self):
-        acc = tf.keras.metrics.Accuracy()
-        acc.update_state(self.y_true, self.y_pred)
-        accuracy = acc.result().numpy()
-        return accuracy
 
-    # Check if balanced or imbalanced data
-
-    def calculate_precision(self):
-        precision = tf.keras.metrics.Precision()
-        precision.update_state(self.y_true, self.y_pred)
-        precision = precision.result().numpy()
-        return precision
-
-    def calculate_recall(self):
-        recall = tf.keras.metrics.Recall()
-        recall.update_state(self.y_true, self.y_pred)
-        recall = recall.result().numpy()
-        return recall
-
-    def calculate_f1_score(self):
-        precision = self.calculate_precision()
-        recall = self.calculate_recall()
-        f1_score = 2 * precision * recall / (precision + recall)
-        return f1_score
-
-
-    # Regression Problems
-
-    def calculate_mse(self):
-        pass
-
-    def calculate_mae(self):
-        pass
-
-    def calculate_mape(self):
-        pass
-
-
-    # Print results
     def evaluate_performance(self):
+        """Evaluate ML model performance comparing expected and predicted labels."""
         if 'classification' in self.task:
+            print(classification_report(self.y_true, self.y_pred))
             self.plot_confusion_matrix()
             if 'binary' in self.task:
-                print('Accuracy:  ', self.calculate_accuracy(), '\n')
-                print('Precision: ', self.calculate_precision())
-                print('Recall:    ', self.calculate_recall())
-                print('F1 Score:  ', round(self.calculate_f1_score(), 2))
-            else:
-                print('Accuracy:  ', self.calculate_accuracy(), '\n')
+                print(self.plot_roc())
         else:
-            print('Implement evaluation for regression problems!')
+            self.regression_report()
+            self.plot_scatter()
