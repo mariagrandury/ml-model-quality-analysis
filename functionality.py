@@ -4,18 +4,27 @@ ML can be seen as a data-driven development technique we also categorize methods
 that measure the quality of data into this pillar. Example analyses: Accuracy,
 Confusion, Reliability, Fairness, Generalization"""
 
+import seaborn as sns
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 class FunctionalityAnalysis:
 
-    def __init__(self, y_true, y_pred, task, nclass):
+    def __init__(self, y_true, y_pred, task):
         self.y_true = y_true
         self.y_pred = y_pred
         self.task = task
-        self.nclass = nclass
 
-    def show_matrix_confusion(self):
-        return tf.math.confusion_matrix(self.y_true, self.y_pred).numpy()
+
+    # Classification Problems
+
+    def plot_confusion_matrix(self, p=0.5):
+        cm = tf.math.confusion_matrix(self.y_true, self.y_pred)
+        plt.figure(figsize=(5, 5))
+        sns.heatmap(cm, annot=True, fmt="d")
+        plt.title('Confusion matrix @{:.2f}'.format(p))
+        plt.ylabel('Actual label')
+        plt.xlabel('Predicted label')
 
     def calculate_accuracy(self):
         acc = tf.keras.metrics.Accuracy()
@@ -43,11 +52,24 @@ class FunctionalityAnalysis:
         f1_score = 2 * precision * recall / (precision + recall)
         return f1_score
 
+
+    # Regression Problems
+
+    def calculate_mse(self):
+        pass
+
+    def calculate_mae(self):
+        pass
+
+    def calculate_mape(self):
+        pass
+
+
+    # Print results
     def evaluate_performance(self):
-        if self.task == 'classification':
-            self.show_matrix_confusion()
-            print('Confusion Matrix: \n', self.show_matrix_confusion(), '\n')
-            if self.nclass == 'binary':
+        if 'classification' in self.task:
+            self.plot_confusion_matrix()
+            if 'binary' in self.task:
                 print('Accuracy:  ', self.calculate_accuracy(), '\n')
                 print('Precision: ', self.calculate_precision())
                 print('Recall:    ', self.calculate_recall())
