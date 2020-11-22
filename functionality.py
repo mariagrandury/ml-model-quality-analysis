@@ -4,11 +4,11 @@ ML can be seen as a data-driven development technique we also categorize methods
 that measure the quality of data into this pillar. Example analyses: Accuracy,
 Confusion, Reliability, Fairness, Generalization"""
 
-import seaborn as sns
-import tensorflow as tf
-import matplotlib.pyplot as plt
 import sklearn
-from sklearn.metrics import confusion_matrix, classification_report, mean_absolute_error, mean_squared_error, r2_score
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics \
+    import confusion_matrix, roc_curve, classification_report, mean_absolute_error, mean_squared_error, r2_score
 
 
 class FunctionalityAnalysis:
@@ -63,8 +63,8 @@ class FunctionalityAnalysis:
         plt.xlabel('Predicted label')
 
 
-    def evaluate_performance(self):
-        """Evaluate ML model performance comparing expected and predicted labels."""
+    def evaluate(self):
+        """Evaluate ML model functionality comparing expected and predicted labels."""
         if 'classification' in self.task:
             print(classification_report(self.y_true, self.y_pred))
             self.plot_confusion_matrix()
