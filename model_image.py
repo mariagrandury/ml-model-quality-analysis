@@ -26,13 +26,13 @@ class ModelImage:
         self.input_shape = self.model.get_layer(self.model.layers[0].name).input.shape
         self.num_classes = self.model.get_layer(self.model.layers[-1].name).output.shape[1]
         if self.num_classes == 1: self.num_classes = 2
-        #print('Model loaded! Input shape:', self.input_shape, ', number of classes:', self.num_classes)
+        print('Model loaded! Input shape:', self.input_shape, ', number of classes:', self.num_classes)
 
         return self
 
 
     def load_data(self, split=0.1, test_samples=100,
-                  batch_size=32, shuffle=True,
+                  batch_size=1, shuffle=True,
                   data_url=None, data_dir=None, data_tf=None):
         """Load and preprocess data.
 
@@ -45,7 +45,7 @@ class ModelImage:
             This main directory should have subdirectories with the names of the classes.
         :param data_tf: Str, name of the TensorFlow dataset. See tfds.list_builders().
         """
-        seed = 123 # for reproducibility
+        seed = 23 # for reproducibility
         AUTOTUNE = tf.data.experimental.AUTOTUNE # for better performance
         size = (self.input_shape[1], self.input_shape[2]) # size to resize images
 
@@ -64,7 +64,7 @@ class ModelImage:
 
             test_ds = tf.keras.preprocessing.image_dataset_from_directory(
                 data_dir, validation_split=split, subset='validation', seed=seed,
-                image_size=size, batch_size=1, shuffle=shuffle
+                image_size=size, batch_size=batch_size, shuffle=shuffle
             )
             data = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
@@ -74,7 +74,7 @@ class ModelImage:
             split = "train[:" + str(test_samples) + "]"
             test_ds = tfds.load(data_tf, split=split, as_supervised=True, shuffle_files=shuffle)
             test_ds = test_ds.map(lambda x, y: (tf.image.resize(x, size), y))
-            data = test_ds.cache().batch(1).prefetch(buffer_size=AUTOTUNE)
+            data = test_ds.cache().batch(batch_size).prefetch(buffer_size=AUTOTUNE)
 
 
         self.data = data
@@ -83,74 +83,77 @@ class ModelImage:
         return self
 
 
-    def predict(self):
+    def predict(self, num_examples=100, adv=True, show=False):
         """Generate the model predictions for the given data.
 
-        :returns: predictions: Predictions of the model.
-        :returns: labels: Labels to perform functionality analysis.
+        :param num_examples: Int, number of examples to predict (default: 100)
+        :param adv: Bool, whether to create adversarial examples (default: True)
+        :param show: Bool, whether to show an adversarial example (default: False)
+
+        :returns: y_true: Labels to perform functionality and robustness analysis.
+        :returns: y_pred: Predictions of the model for the original examples.
+        :returns: y_adv: Predictions of the model for the adversarial examples.
         """
-        predictions= []
-        labels = []
-        for image, label in tfds.as_numpy(self.data):
-            predictions.append(self.model.predict(image))
-            labels.append(label)
-
-        y_pred = []
-        if self.num_classes > 2:
-            for batch in predictions:
-                for prediction in batch:
-                    y_pred.append(tf.argmax(prediction).numpy())
-        else:
-            for batch in predictions:
-                for prediction in batch:
-                    if prediction < 0.5:
-                        y_pred.append(0)
-                    else:
-                        y_pred.append(1)
-
-        y_true = []
-        for batch in labels:
-            for label in batch:
-                y_true.append(label)
-
-        return y_pred, y_true
-
-    def robustness(self):
         y_true = []
         y_pred = []
         y_adv = []
 
-        for image, label in self.data.take(1):
-            image = image/ 255
-            plt.imshow(image[0]*0.5+0.5)
-            plt.show()
-
-            y_true.append(label.numpy()[0])
-            y_pred.append(tf.argmax(self.model.predict(image)[0]).numpy())
+        for image, label in self.data.take(num_examples):
+            label_original = label.numpy()[0]
+            y_true.append(label_original)
 
             model_pred = self.model.predict(image)
-            print(model_pred)
-            label = tf.one_hot(label, model_pred.shape[-1])
-            label = tf.reshape(label, (1, model_pred.shape[-1]))
-            print(label)
-            perturbations = get_gradient_sign(self.model, image, label)
-            #print(perturbations)
-            plt.imshow(perturbations[0]*0.5+0.5)
-            plt.show()
-            #print_perturbations = tf.reshape(perturbations[0], size)
-            #plt.imshow(print_perturbations)
+            if self.num_classes > 2:
+                label_predicted = tf.argmax(model_pred[0]).numpy()
+            else:
+                label_predicted = tf.round(model_pred[0]).numpy()
+            y_pred.append(label_predicted)
 
-            adv_x = image + 0.05 * perturbations
-            adv_x = tf.clip_by_value(adv_x, -1, 1)
-            print(adv_x.shape)
-            print(self.model.predict(adv_x))
-            adv_label = tf.argmax(self.model.predict(adv_x)[0]).numpy()
-            print(adv_label)
-            y_adv.append(adv_label)
+            if adv:
+                if self.num_classes > 2:
+                    label = tf.one_hot(label, model_pred.shape[-1])
+                    label = tf.reshape(label, (1, model_pred.shape[-1]))
+                else:
+                    label = label
 
-            plt.figure()
-            #adv_x = tf.reshape(adv_x, size)
-            plt.imshow(adv_x[0]*0.5+0.5)
-            plt.show()
+                perturbations = []
+                perturbations = get_gradient_sign(self.model, image, label)
+
+                image = image / 255
+                adv_x = image + 0.15 * perturbations
+                adv_x = adv_x * 255
+
+                adv_pred = self.model.predict(adv_x)
+
+                if self.num_classes > 2:
+                    adv_label = tf.argmax(adv_pred[0]).numpy()
+                else:
+                    adv_label = tf.round(adv_pred[0]).numpy()
+                y_adv.append(adv_label)
+
+            if show:
+                plt.figure(figsize=(11, 4))
+
+                plt.subplot(1, 3, 1)
+                plt.imshow(image[0])
+                plt.title('Original Image, label: %i / %i' % (label_original, label_predicted))
+
+                plt.subplot(1, 3, 2)
+                perturbations = tf.clip_by_value(perturbations, 0, 1)
+                plt.imshow(perturbations[0])
+                plt.title('Perturbation')
+                # if channels == 1:
+                # plt.imshow(tf.reshape(perturbations[0], size))
+
+                plt.subplot(1, 3, 3)
+                adv_x = adv_x / 255
+                adv_x = tf.clip_by_value(adv_x, 0, 1)
+                plt.imshow(adv_x[0])
+                plt.title('Adversarial Example, label: %i' % adv_label)
+                # if channels == 1:
+                # adv_x = tf.reshape(adv_x, size)
+
+                plt.suptitle("Adversarial Example")
+                plt.show()
 
         return y_true, y_pred, y_adv
