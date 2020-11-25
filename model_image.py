@@ -55,7 +55,7 @@ class ModelImage(ModelInterface):
                   batch_size=1, shuffle=True):
         """Load and preprocess data.
 
-        :param data_url: url to the zip or tar file to download the data
+        :param data_url: url download the data from
         :param data_dir: path to the directory containing the data
             This main directory should have subdirectories with the names of the classes
         :param data_tf: name of the TensorFlow dataset. See tfds.list_builders()
@@ -135,15 +135,13 @@ class ModelImage(ModelInterface):
 
             # Create an adversarial example using the Fast Gradient Sign Method
             if adv:
-                # Prepare label to calculate loss using categorical_crossentropy
+                # Prepare label to calculate loss using binary or categorical cross-entropy
                 if self.num_classes > 2:
                     label = tf.one_hot(label, model_pred.shape[-1])
-                    label = tf.reshape(label, (1, model_pred.shape[-1]))
-                else:
-                    label = label
+                label = tf.reshape(label, (1, model_pred.shape[-1]))
 
                 # Create perturbations
-                perturbations = get_gradient_sign(self.model, image, label)
+                perturbations = get_gradient_sign(self.model, self.num_classes, image, label)
 
                 # Distort the original image
                 image = image / 255

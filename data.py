@@ -11,7 +11,7 @@ from tensorflow.keras import layers
 def download_data(url, cache_dir):
     """Download data.
 
-    :param url: url to the zip or tar file to download the data
+    :param url: url to download the data from
     :param cache_dir: directory to store the downloaded data
     """
     file_name = url.split('/')[-1]
