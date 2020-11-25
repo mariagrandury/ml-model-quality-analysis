@@ -1,7 +1,20 @@
-"""Create an interface to an abstract ML model that is equipped with all the
-methods that are relevant to enable the model to be used inside a quality analysis."""
-
 class ModelInterface:
+    """Interface to an abstract ML model that is equipped with relevant methods to enable the model
+    to be used inside a quality analysis.
+
+    Attributes:
+    -----------
+    data_type: data type, e.g. 'image' or 'text'
+    task: machine learning task, e.g. 'classification' or 'regression'
+    model: machine learning model
+    data: data to test the model with
+
+    Methods:
+    --------
+    load_model(): load a pretrained model
+    load_data(): load and preprocess data
+    predict(): generate the model predictions
+    """
 
     def __init__(self):
         self.type = None
@@ -13,18 +26,16 @@ class ModelInterface:
     def load_model(self, model_path):
         """Load a pretrained model.
 
-        :param model_path: Path to model file.
+        :param model_path: path to the saved model folder
         """
         raise NotImplementedError
 
-    def load_data(self, samples, size, data_path, data_url, data_tf):
+
+    def load_data(self, data_source, test_samples):
         """Load and preprocess data.
 
-        :param samples: Number of samples to test the model (default: 100)
-        :param size: Size of the resized images (default: (150,150))
-        :param data_path: Path to the directory containing the data (e.g. './data/predict/')
-        :param data_url: URL to download the data (e.g. 'https:// example.zip')
-        :param data_tf: Name of the TensorFlow dataset (default: 'cats_vs_dogs')
+        :param data_source: source of the testing data
+        :param test_samples: number of samples to test the model
         """
         raise NotImplementedError
 
@@ -32,7 +43,7 @@ class ModelInterface:
     def predict(self):
         """Generate the model predictions for the given data.
 
-        :returns: prediction: Prediction of the model. Numpy array of shape (1,).
-        :returns: labels: Labels to check if the predictions are correct.
+        :returns: prediction: predictions of the model
+        :returns: labels: labels to check if the predictions are correct
         """
         raise NotImplementedError

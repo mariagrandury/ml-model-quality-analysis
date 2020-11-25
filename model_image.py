@@ -1,51 +1,70 @@
 import pathlib
 import tensorflow as tf
+import matplotlib.pyplot as plt
 import tensorflow_datasets as tfds
 
 from data import download_data
 from robustness import get_gradient_sign
-import matplotlib.pyplot as plt
+from model_interface import ModelInterface
 
-class ModelImage:
+class ModelImage(ModelInterface):
+    """Implement the ModelInterface for an image classification model.
 
-    def __init__(self):
-        self.type = 'image'
-        self.task = None
+    Attributes:
+    -----------
+    data_type: data type, in this case 'image'
+    task: machine learning task, in this case 'classification'
+    model: machine learning model (loaded as a keras model)
+    input_shape: input shape of the ML model
+    num_classes: number of classes if the task is classification
+    data: data to test the model with (loaded as a TF dataset)
+
+    Methods:
+    --------
+    load_model(model_path=''): Load a pretrained model.
+    load_data(data_url='', data_dir='', data_tf=''): Load and preprocess data.
+    predict(adv=True): Generate the model predictions for the given data and for adversarial examples.
+    """
+
+    def __init__(self, data_type='image', task='classification'):
+        super().__init__()
+        self.data_type = data_type
+        self.task = task
         self.model = None
         self.input_shape = None
         self.num_classes = None
         self.data = None
 
 
-    def load_model(self, model_path):
-        """Load a pretrained model.
+    def load_model(self, model_path: str):
+        """Load a pretrained model. Save its input shape and output shape (number of classes in a classification task).
 
-        :param model_path: Str, path to saved model folder.
+        :param model_path: path to the saved model folder
         """
         self.model = tf.keras.models.load_model(model_path)
         self.input_shape = self.model.get_layer(self.model.layers[0].name).input.shape
         self.num_classes = self.model.get_layer(self.model.layers[-1].name).output.shape[1]
         if self.num_classes == 1: self.num_classes = 2
-        print('Model loaded! Input shape:', self.input_shape, ', number of classes:', self.num_classes)
+        # print('Model loaded! Input shape:', self.input_shape, ', number of classes:', self.num_classes)
 
         return self
 
 
-    def load_data(self, split=0.1, test_samples=100,
-                  batch_size=1, shuffle=True,
-                  data_url=None, data_dir=None, data_tf=None):
+    def load_data(self, data_url='', data_dir='', data_tf='',
+                  split=0.1, test_samples=100,
+                  batch_size=1, shuffle=True):
         """Load and preprocess data.
 
-        :param split: Float, percentage of samples for testing (default: 0.1)
-        :param test_samples: Int, number of samples to test the model (default: 100)
-        :param batch_size: Int, size of the batches of data (default: 32)
-        :param shuffle: Bool, whether to shuffle the data (default: True)
-        :param data_url: Str, url to the zip or tar file to download the data.
-        :param data_dir: Str, path to the directory containing the data.
-            This main directory should have subdirectories with the names of the classes.
-        :param data_tf: Str, name of the TensorFlow dataset. See tfds.list_builders().
+        :param data_url: url to the zip or tar file to download the data
+        :param data_dir: path to the directory containing the data
+            This main directory should have subdirectories with the names of the classes
+        :param data_tf: name of the TensorFlow dataset. See tfds.list_builders()
+        :param split: percentage of samples for testing (default: 0.1)
+        :param test_samples: number of samples to test the model (default: 100)
+        :param batch_size: size of the batches of data (default: 32)
+        :param shuffle: whether to shuffle the data (default: True)
         """
-        seed = 23 # for reproducibility
+        seed = 123 # for reproducibility
         AUTOTUNE = tf.data.experimental.AUTOTUNE # for better performance
         size = (self.input_shape[1], self.input_shape[2]) # size to resize images
 
@@ -83,25 +102,29 @@ class ModelImage:
         return self
 
 
-    def predict(self, num_examples=100, adv=True, show=False):
-        """Generate the model predictions for the given data.
+    def predict(self, num_examples=100, adv=False, epsilon=0.1, plot=False):
+        """Generate the model predictions for the given data. Can create adversarial images and predict their labels.
 
-        :param num_examples: Int, number of examples to predict (default: 100)
-        :param adv: Bool, whether to create adversarial examples (default: True)
-        :param show: Bool, whether to show an adversarial example (default: False)
+        :param num_examples: number of examples to predict (default: 100)
+        :param adv: whether to create adversarial examples and predict its labels (default: False)
+        :param epsilon: multiplier to ensure the perturbations to the original image are small (default: 0.1)
+        :param plot: whether to plot the original and adversarial images (default: False)
 
-        :returns: y_true: Labels to perform functionality and robustness analysis.
-        :returns: y_pred: Predictions of the model for the original examples.
-        :returns: y_adv: Predictions of the model for the adversarial examples.
+        :returns: y_true: labels to perform functionality and robustness analysis
+        :returns: y_pred: predictions of the model for the original examples
+        :returns: y_adv: predictions of the model for the adversarial examples
         """
         y_true = []
         y_pred = []
         y_adv = []
 
         for image, label in self.data.take(num_examples):
-            label_original = label.numpy()[0]
-            y_true.append(label_original)
 
+            # Store expected labels in y_true
+            label_expected = label.numpy()[0]
+            y_true.append(label_expected)
+
+            # Make predictions and store the predicted label in y_pred
             model_pred = self.model.predict(image)
             if self.num_classes > 2:
                 label_predicted = tf.argmax(model_pred[0]).numpy()
@@ -109,51 +132,57 @@ class ModelImage:
                 label_predicted = tf.round(model_pred[0]).numpy()
             y_pred.append(label_predicted)
 
+
+            # Create an adversarial example using the Fast Gradient Sign Method
             if adv:
+                # Prepare label to calculate loss using categorical_crossentropy
                 if self.num_classes > 2:
                     label = tf.one_hot(label, model_pred.shape[-1])
                     label = tf.reshape(label, (1, model_pred.shape[-1]))
                 else:
                     label = label
 
-                perturbations = []
+                # Create perturbations
                 perturbations = get_gradient_sign(self.model, image, label)
 
+                # Distort the original image
                 image = image / 255
-                adv_x = image + 0.15 * perturbations
-                adv_x = adv_x * 255
+                adv_image = image + epsilon * perturbations
+                adv_image = adv_image * 255
 
-                adv_pred = self.model.predict(adv_x)
-
+                # Make predictions for the adversarial image and store the predicted label in y_adv
+                adv_pred = self.model.predict(adv_image)
                 if self.num_classes > 2:
                     adv_label = tf.argmax(adv_pred[0]).numpy()
                 else:
                     adv_label = tf.round(adv_pred[0]).numpy()
                 y_adv.append(adv_label)
 
-            if show:
-                plt.figure(figsize=(11, 4))
 
-                plt.subplot(1, 3, 1)
-                plt.imshow(image[0])
-                plt.title('Original Image, label: %i / %i' % (label_original, label_predicted))
+                # Plot the original image, the perturbations and the adversarial example
+                if plot:
+                    plt.figure(figsize=(11, 4))
 
-                plt.subplot(1, 3, 2)
-                perturbations = tf.clip_by_value(perturbations, 0, 1)
-                plt.imshow(perturbations[0])
-                plt.title('Perturbation')
-                # if channels == 1:
-                # plt.imshow(tf.reshape(perturbations[0], size))
+                    plt.subplot(1, 3, 1)
+                    plt.imshow(image[0])
+                    plt.title('Original Image \nExpected label: %i / Predicted label: %i' % (label_expected, label_predicted))
 
-                plt.subplot(1, 3, 3)
-                adv_x = adv_x / 255
-                adv_x = tf.clip_by_value(adv_x, 0, 1)
-                plt.imshow(adv_x[0])
-                plt.title('Adversarial Example, label: %i' % adv_label)
-                # if channels == 1:
-                # adv_x = tf.reshape(adv_x, size)
+                    plt.subplot(1, 3, 2)
+                    perturbations = tf.clip_by_value(perturbations, 0, 1)
+                    plt.imshow(perturbations[0])
+                    plt.title('Perturbation')
+                    # if channels == 1:
+                    # plt.imshow(tf.reshape(perturbations[0], size))
 
-                plt.suptitle("Adversarial Example")
-                plt.show()
+                    plt.subplot(1, 3, 3)
+                    adv_image = adv_image / 255
+                    adv_image = tf.clip_by_value(adv_image, 0, 1)
+                    plt.imshow(adv_image[0])
+                    plt.title('Adversarial Example \nPredicted label: %i' % adv_label)
+                    # if channels == 1:
+                    # adv_x = tf.reshape(adv_x, size)
+
+                    plt.suptitle("Adversarial Example")
+                    plt.show()
 
         return y_true, y_pred, y_adv

@@ -1,9 +1,3 @@
-"""Functionality: groups analyses that evaluate how ”well“ an AI module performs a
-given task (i.e. assessing the suitability of an AI module for an application domain). As
-ML can be seen as a data-driven development technique we also categorize methods
-that measure the quality of data into this pillar. Example analyses: Accuracy,
-Confusion, Reliability, Fairness, Generalization"""
-
 import sklearn
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -11,7 +5,21 @@ from sklearn.metrics \
     import confusion_matrix, roc_curve, classification_report, mean_absolute_error, mean_squared_error, r2_score
 
 
-class FunctionalityAnalysis:
+class QualityAnalysis:
+    """Perform quality analyses of an ML model.
+
+    Attributes:
+    -----------
+    y_true: expected labels
+    y_pred: predicted labels
+    task: machine learning task
+
+    Methods:
+    --------
+    plot_confusion_matrix(): plot confusion matrix
+    plot_roc(): plot ROC curve
+    calculate_accuracy:
+    """
 
     def __init__(self, y_true, y_pred, task):
         self.y_true = y_true
@@ -24,7 +32,7 @@ class FunctionalityAnalysis:
         cm = confusion_matrix(self.y_true, self.y_pred)
         plt.figure(figsize=(5, 5))
         sns.heatmap(cm, annot=True, fmt="d")
-        plt.title('Confusion matrix @{:.2f}'.format(p))
+        plt.title('Confusion Matrix @{:.2f}'.format(p))
         plt.ylabel('Expected label')
         plt.xlabel('Predicted label')
         plt.show()
@@ -35,6 +43,7 @@ class FunctionalityAnalysis:
         fp, tp, _ = sklearn.metrics.roc_curve(self.y_true, self.y_pred)
         plt.figure(figsize=(5, 5))
         plt.plot(100 * fp, 100 * tp,linewidth=2, **kwargs)
+        plt.title('ROC Curve')
         plt.xlabel('False positives [%]')
         plt.ylabel('True positives [%]')
         plt.xlim([-0.5, 20])
@@ -43,6 +52,11 @@ class FunctionalityAnalysis:
         ax = plt.gca()
         ax.set_aspect('equal')
         plt.show()
+
+
+    def classification_report(self):
+        """Calculate the main classification metrics."""
+        print(classification_report(self.y_true, self.y_pred))
 
 
     def regression_report(self):
@@ -64,12 +78,12 @@ class FunctionalityAnalysis:
 
 
     def evaluate(self):
-        """Evaluate ML model functionality comparing expected and predicted labels."""
+        """Evaluate ML model performance comparing expected and predicted labels."""
         if 'classification' in self.task:
-            print(classification_report(self.y_true, self.y_pred))
+            self.classification_report()
             self.plot_confusion_matrix()
             if 'binary' in self.task:
-                print(self.plot_roc())
+                self.plot_roc() #había un print
         else:
             self.regression_report()
             self.plot_scatter()
