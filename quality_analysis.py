@@ -2,7 +2,8 @@ import sklearn
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics \
-    import confusion_matrix, roc_curve, classification_report, mean_absolute_error, mean_squared_error, r2_score
+    import confusion_matrix, roc_curve, classification_report, \
+    max_error, mean_absolute_error, mean_squared_error, r2_score
 
 
 class QualityAnalysis:
@@ -61,9 +62,11 @@ class QualityAnalysis:
 
     def regression_report(self):
         """Calculate the main regression metrics."""
+        me = max_error(self.y_true, self.y_pred)
         mae = mean_absolute_error(self.y_true, self.y_pred)
         mse = mean_squared_error(self.y_true, self.y_pred)
         r2 = r2_score(self.y_true, self.y_pred)
+        print('max error                       ', me)
         print('mean absolute error             ', mae)
         print('mean squared error              ', mse)
         print('coefficient of determination    ', r2)
@@ -83,7 +86,7 @@ class QualityAnalysis:
             self.classification_report()
             self.plot_confusion_matrix()
             if 'binary' in self.task:
-                self.plot_roc() #había un print
+                self.plot_roc()
         else:
             self.regression_report()
             self.plot_scatter()
