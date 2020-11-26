@@ -4,3 +4,7 @@
 /training_notebooks/
 /ml-model-quality-analysis/.ipynb_checkpoints/
 /Research_Engineering_Challenge_November 2020.pdf
+/saved_model/image-multiclass-classification-flowers/variables/
+/saved_model/image-multiclass-classification-flowers/assets/
+/saved_model/image-binary-classification-cats-vs-dogs/variables/
+/saved_model/image-binary-classification-cats-vs-dogs/assets/
