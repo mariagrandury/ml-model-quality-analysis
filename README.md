@@ -15,7 +15,7 @@ decision-making process.
 changes in the input. 
 
 
-The latest release performs functionality and robustness analyses for image classification 
+This first release performs functionality and robustness analyses for image classification 
 and regression models. The next versions will include comprehensibility analysis and accept text data.
 
 # Installation
@@ -34,4 +34,4 @@ pip install tensorflow==2.3
 
 # Getting Started
 
-For examples on performing quality analysis for ML models, see the [Quality Report Notebook.](https://github.com/mariagrandury/ml-model-quality-analysis/blob/main/quality_report.ipynb)
+For examples on performing quality analysis for ML models, see the [Quality Report Notebook.](https://github.com/mariagrandury/ml-model-quality-analysis/blob/main/ml-model-quality-analysis/quality_report.ipynb)
