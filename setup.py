@@ -5,7 +5,7 @@ with open('README.md', 'r') as fh:
 
 
 setup(
-    name='ml-model-quality-analysis-mariagrandury',
+    name='ml-model-quality-analysis',
     version='0.0.1',
     author='María Grandury',
     author_email='mariagrandury@gmail.com',
