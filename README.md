@@ -35,3 +35,5 @@ pip install tensorflow==2.3
 ## Getting Started
 
 For examples on performing quality analysis for ML models, see the [Quality Report Notebook.](https://github.com/mariagrandury/ml-model-quality-analysis/blob/main/ml-model-quality-analysis/quality_report.ipynb)
+
+For an overview of the performance metrics calculated and when to use each one, see the [Metrics Notebook.](https://github.com/mariagrandury/ml-model-quality-analysis/blob/main/ml-model-quality-analysis/metrics.ipynb)
